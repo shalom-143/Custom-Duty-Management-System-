@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS duty_rate (
 CREATE INDEX IF NOT EXISTS idx_rate_hscode ON duty_rate (hs_code);
 CREATE INDEX IF NOT EXISTS idx_rate_effective ON duty_rate (effective_date);
 
--- Insert sample duty rates (adjust as needed)
+-- Insert sample duty rates
 INSERT INTO duty_rate (hs_code, duty_percentage, vat_rate, excise_tax, transport_surcharge, effective_date, expiry_date) VALUES
 ('8703.22', 10.0, 19.5, 5.0, 2.5, '2024-01-01', NULL),
 ('8471.30', 0.0, 19.5, 0.0, 1.0, '2024-01-01', NULL),
