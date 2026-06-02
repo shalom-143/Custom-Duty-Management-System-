@@ -2,32 +2,83 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 
-// GET all shipments
+// GET all shipments with pagination and filtering
 router.get('/', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM Shipment ORDER BY ShipmentID ASC');
-    res.json(result.rows);
+    const page      = parseInt(req.query.page)      || 1;
+    const limit     = parseInt(req.query.limit)     || 10;
+    const offset    = (page - 1) * limit;
+    const { status, direction } = req.query;
+
+    const conditions = [];
+    const values     = [];
+
+    // Build dynamic WHERE clause
+    if (status) {
+      values.push(status.toUpperCase());
+      conditions.push(`Status = $${values.length}`);
+    }
+
+    if (direction) {
+      values.push(direction.toUpperCase());
+      conditions.push(`Direction = $${values.length}`);
+    }
+
+    const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    // Add pagination values
+    values.push(limit);
+    values.push(offset);
+
+    const result = await pool.query(
+      `SELECT * FROM Shipment ${where} ORDER BY ShipmentID ASC LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      values
+    );
+
+    // Get total count
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM Shipment ${where}`,
+      conditions.length > 0 ? values.slice(0, conditions.length) : []
+    );
+
+    const total = parseInt(countResult.rows[0].count);
+
+    res.json({
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      data: result.rows
+    });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
-// GET single shipment
+// GET single shipment - optimized
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Validate ID format before hitting database
+    if (!id || id.trim() === '')
+      return res.status(400).json({ error: 'Invalid ShipmentID.' });
+
     const result = await pool.query(
-      'SELECT * FROM Shipment WHERE ShipmentID = $1', [id.toUpperCase()]
+      'SELECT * FROM Shipment WHERE ShipmentID = $1',
+      [id.toUpperCase().trim()]
     );
+
     if (result.rows.length === 0)
       return res.status(404).json({ error: 'Shipment not found' });
+
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST create shipment
+// POST create shipment - optimized
 router.post('/', async (req, res) => {
   try {
     const { shipmentid, goodid, portid, traderid, shipmentdate, direction, status } = req.body;
@@ -35,6 +86,10 @@ router.post('/', async (req, res) => {
     // Validate all fields present
     if (!shipmentid || !goodid || !portid || !traderid || !shipmentdate || !direction || !status)
       return res.status(400).json({ error: 'All fields are required.' });
+
+    // Validate date format
+    if (isNaN(Date.parse(shipmentdate)))
+      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
 
     // Validate direction
     if (!['IMPORT', 'EXPORT'].includes(direction.toUpperCase()))
@@ -49,10 +104,10 @@ router.post('/', async (req, res) => {
       `INSERT INTO Shipment (ShipmentID, GoodID, PortID, TraderID, ShipmentDate, Direction, Status)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
-        shipmentid.toUpperCase(),
-        goodid.toUpperCase(),
-        portid.toUpperCase(),
-        traderid.toUpperCase(),
+        shipmentid.toUpperCase().trim(),
+        goodid.toUpperCase().trim(),
+        portid.toUpperCase().trim(),
+        traderid.toUpperCase().trim(),
         shipmentdate,
         direction.toUpperCase(),
         status.toUpperCase()
@@ -120,20 +175,28 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE shipment
+// DELETE shipment - optimized
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Validate ID before hitting database
+    if (!id || id.trim() === '')
+      return res.status(400).json({ error: 'Invalid ShipmentID.' });
+
     const result = await pool.query(
       'DELETE FROM Shipment WHERE ShipmentID = $1 RETURNING *',
-      [id.toUpperCase()]
+      [id.toUpperCase().trim()]
     );
+
     if (result.rows.length === 0)
       return res.status(404).json({ error: 'Shipment not found' });
+
     res.json({ message: 'Deleted successfully', deleted: result.rows[0] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 module.exports = router;
