@@ -1,0 +1,35 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-client"
+}
+
+enum InspectionType {
+  PHYSICAL
+  DOCUMENTARY
+}
+
+enum InspOutcome {
+  PASSED
+  FAILED
+  FLAGGED
+  PENDING
+}
+
+model Inspection {
+  inspection_id   Int            @id @default(autoincrement())
+  shipment_id     Int
+  officer_id      Int
+  inspection_date DateTime       @db.Date
+  inspection_type InspectionType @default(DOCUMENTARY)
+  outcome         InspOutcome    @default(PENDING)
+  notes           String?        @db.Text
+
+  @@index([shipment_id], map: "idx_inspection_ship")
+  @@index([officer_id], map: "idx_inspection_officer")
+  @@index([inspection_date], map: "idx_inspection_date")
+  @@map("inspection")
+}
